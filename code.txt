@@ -1,0 +1,82 @@
+import pandas as pd
+from datetime import datetime
+
+# Sample data
+data = {
+    'Name': ['Alex', 'John', 'Mathew', 'Matt', 'Jacob'],
+    'Cust_ID': [123457, 123458, 123459, 12345, 1256],
+    'Open_Dt': ['20100112', '20100112', '20100112', '20100112', '20100112'],
+    'Consul_Dt': ['20121013', '20121013', '20121013', '20121013', '20121013'],
+    'VAC_ID': ['MVD', 'MVD', 'MVD', 'MVD', 'MVD'],
+    'DR_Name': ['Paul', 'Paul', 'Paul', 'Paul', 'Paul'],
+    'State': ['SA', 'TN', 'WAS', 'BOS', 'VIC'],
+    'County': ['USA', 'IND', 'PHIL', 'NYC', 'AU'],
+    'DOB': ['06031987', '06031987', '06031987', '06031987', '06031987'],
+    'FLAG': ['A', 'A', 'A', 'A', 'A']
+}
+
+# Step 1: Load Data into DataFrame
+df = pd.DataFrame(data)
+
+# Convert date fields to datetime for processing
+df['Open_Dt'] = pd.to_datetime(df['Open_Dt'], format='%Y%m%d')
+df['Consul_Dt'] = pd.to_datetime(df['Consul_Dt'], format='%Y%m%d')
+df['DOB'] = pd.to_datetime(df['DOB'], format='%d%m%Y')
+
+# Step 2: Add Derived Columns (age and days_since_last_consulted)
+df['age'] = df['DOB'].apply(lambda dob: datetime.now().year - dob.year)
+df['days_since_last_consulted'] = (datetime.now() - df['Consul_Dt']).dt.days
+
+# Step 3: Separate customers into country-specific tables
+country_tables = {}
+
+# Define country-specific tables
+for country in df['County'].unique():
+    country_tables[country] = df[df['County'] == country].copy()
+    country_tables[country]['Table_Name'] = f'Table_{country}'
+
+# Print country tables
+for country, table in country_tables.items():
+    print(f"\nTable for {country}:\n", table)
+
+# Step 4: Handling customer movements
+# Assume we have a record of customer movements
+movements = {
+    123457: {'new_country': 'IND', 'visit_date': '20231016'},
+    123458: {'new_country': 'USA', 'visit_date': '20231015'},
+    123459: {'new_country': 'PHIL', 'visit_date': '20231014'},
+}
+
+# Update the country tables based on movements
+for cust_id, movement in movements.items():
+    if cust_id in df['Cust_ID'].values:
+        # Find the customer
+        customer_record = df[df['Cust_ID'] == cust_id]
+        new_country = movement['new_country']
+        visit_date = pd.to_datetime(movement['visit_date'])
+
+        # Update the customer's record in the new country table
+        if new_country in country_tables:
+            # Check if the new record has a later consultation date
+            if customer_record['Consul_Dt'].values[0] < visit_date:
+                country_tables[new_country] = country_tables[new_country].append(
+                    customer_record.assign(Consul_Dt=visit_date)
+                )
+
+# Step 5: Validations
+mandatory_columns = ['Name', 'Cust_ID', 'Open_Dt', 'Consul_Dt']
+for column in mandatory_columns:
+    if df[column].isnull().any():
+        print(f"Validation Failed: Missing values found in column {column}")
+    else:
+        print(f"Validation Passed: No missing values in column {column}")
+
+# Validation 2: Check if 'days_since_last_consulted' is greater than 30
+if df['days_since_last_consulted'].any() > 30:
+    print("Validation Passed: Some records have days_since_last_consulted > 30")
+else:
+    print("Validation Failed: All records have days_since_last_consulted <= 30")
+
+# Step 6: Display final filtered tables
+for country, table in country_tables.items():
+    print(f"\nFinal Table for {country}:\n", table)
